@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "user-app",
+    "name": "Moms Kitchen",
     "slug": "user-app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -10,20 +10,34 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#FFFFFF"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": false,
+      "bundleIdentifier": "com.momskitchen.user"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#FFFFFF"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.momskitchen.user"
     },
     "web": {
-      "favicon": "./assets/favicon.png"
-    }
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro",
+      "output": "single"
+    },
+    "scheme": "momskitchen-user",
+    "extra": {
+      "eas": {
+        "projectId": "user-app-local"
+      }
+    },
+    "updates": {
+      "url": ""
+    },
+    "plugins": []
   }
 }
