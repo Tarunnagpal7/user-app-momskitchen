@@ -38,6 +38,8 @@
     "updates": {
       "url": ""
     },
-    "plugins": []
+    "plugins": [
+      "expo-web-browser"
+    ]
   }
 }

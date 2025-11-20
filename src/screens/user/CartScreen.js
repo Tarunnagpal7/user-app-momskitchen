@@ -60,21 +60,9 @@ const CartScreen = ({ navigation }) => {
       </View>
       
       <View style={styles.quantityContainer}>
-        <TouchableOpacity 
-          style={styles.quantityButton}
-          onPress={() => updateQuantity(item.id, item.quantity - 1)}
-        >
-          <Text style={styles.quantityButtonText}>-</Text>
-        </TouchableOpacity>
         
         <Text style={styles.quantityText}>{item.quantity}</Text>
         
-        <TouchableOpacity 
-          style={styles.quantityButton}
-          onPress={() => updateQuantity(item.id, item.quantity + 1)}
-        >
-          <Text style={styles.quantityButtonText}>+</Text>
-        </TouchableOpacity>
       </View>
       
       <TouchableOpacity 
@@ -122,21 +110,12 @@ const CartScreen = ({ navigation }) => {
           
           <View style={styles.footer}>
             <View style={styles.summaryContainer}>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Subtotal:</Text>
-                <Text style={styles.summaryValue}>₹{getCartTotal().toFixed(2)}</Text>
-              </View>
-              
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Delivery Fee:</Text>
-                <Text style={styles.summaryValue}>₹30.00</Text>
-              </View>
               
               <View style={styles.divider} />
               
               <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>Total:</Text>
-                <Text style={styles.totalAmount}>₹{(getCartTotal() + 30).toFixed(2)}</Text>
+                <Text style={styles.totalLabel}>Subtotal:</Text>
+                <Text style={styles.totalAmount}>₹{(getCartTotal()).toFixed(2)}</Text>
               </View>
             </View>
             

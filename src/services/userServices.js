@@ -27,4 +27,10 @@ export const OrderService = {
   create: (payload) => api.post('/api/orders', payload),
   get: (orderId) => api.get(`/api/orders/${orderId}`),
   cancel: (orderId) => api.put(`/api/orders/${orderId}/cancel`),
+  
+};
+
+export const PaymentService = {
+  verify: (payload) => api.post('/api/payments/verify-payment', payload),
+  fail: (payload) => api.post('/api/payments/fail-payment', payload),
 };
