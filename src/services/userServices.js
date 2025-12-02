@@ -7,6 +7,10 @@ export const AuthService = {
   logout: () => api.post('/api/auth/logout'),
 };
 
+export const settingsService = {
+  getSettings: () => api.get('/api/settings'),
+};
+
 export const UserService = {
   me: () => api.get('/api/users/me'),
   updateProfile: (payload) => api.put('/api/users/me', payload),
@@ -26,8 +30,9 @@ export const OrderService = {
   list: (params) => api.get('/api/orders', { params }),
   create: (payload) => api.post('/api/orders', payload),
   get: (orderId) => api.get(`/api/orders/${orderId}`),
-  cancel: (orderId) => api.put(`/api/orders/${orderId}/cancel`),
-  
+  cancel: (orderId) => api.patch(`/api/orders/${orderId}/cancel`),
+  calculate: (payload) => api.post('/api/orders/calculate', payload),
+
 };
 
 export const PaymentService = {

@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   Modal,
+  RefreshControl,
   ScrollView,
   Image,
   StatusBar,
@@ -11,7 +12,7 @@ import {
 import { Button, TextInput, useTheme } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSelector } from 'react-redux';
-import { MenuService, UserService } from '../../services/userServices';
+import { MenuService, UserService, settingsService } from '../../services/userServices';
 import AppHeader from '../../components/AppHeader';
 import AddressBar from '../../components/AddressBar';
 import OffersCarousel from '../../components/OffersCarousel';
@@ -35,14 +36,52 @@ export default function DashboardScreen({ navigation }) {
   // Mom details modal
   const [showMomDetails, setShowMomDetails] = useState(false);
   const [selectedMom, setSelectedMom] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [canOrder, setCanOrder] = useState(false);
+
+  const [settings, setSettings] = useState(null);
+
+  const loadSettings = async () => {
+    try {
+      const res = await settingsService.getSettings();
+      const fetchedSettings = res.data?.data?.settings;
+      setSettings(fetchedSettings);
+      checkOrderingTime(fetchedSettings);
+    } catch (e) {
+      console.log("Load Settings Error:", e);
+    }
+  };
+
+  const checkOrderingTime = (currentSettings) => {
+    if (!currentSettings?.orderingWindows) return;
+
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    const currentTimeStr = `${currentHour.toString().padStart(2, '0')}:${currentMinute.toString().padStart(2, '0')}`;
+
+    const isTime = currentSettings.orderingWindows.some(window => {
+      return currentTimeStr >= window.start && currentTimeStr <= window.end;
+    });
+
+    setCanOrder(isTime);
+  };
 
   useEffect(() => {
     loadMenus();
-  }, [navigation]);
+    loadSettings();
+  }, []);
 
-  const loadMenus = async () => {
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (settings) checkOrderingTime(settings);
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [settings]);
+
+  const loadMenus = async (isRefresh = false) => {
     try {
-      setLoading(true);
+      if (!isRefresh) setLoading(true);
       setError('');
 
       const res = await MenuService.list({ limit: 20 });
@@ -59,8 +98,14 @@ export default function DashboardScreen({ navigation }) {
       console.log('Menu Load Error:', e);
       setError(e?.response?.data?.message || 'Failed to load menus');
     } finally {
-      setLoading(false);
+      if (!isRefresh) setLoading(false);
     }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([loadMenus(true), loadSettings()]);
+    setRefreshing(false);
   };
 
   const handleMakeDefault = async (addressId) => {
@@ -106,7 +151,7 @@ export default function DashboardScreen({ navigation }) {
 
       const me = await UserService.me();
       setAddresses(me?.data?.data?.addresses || []);
-      
+
       setError('');
       setLoading(false);
     } catch (e) {
@@ -155,7 +200,7 @@ export default function DashboardScreen({ navigation }) {
       mom_rating: menu.mom_details?.rating || 0,
       price: `₹${menu.total_cost}`,
       remaining_orders: menu.max_orders || 0,
-      menuImage: require('../../../assets/images/food_1.png'),
+      menuImage: menu.image?.url ? { uri: menu.image.url } : null,
       items: menu.items || [],
     }));
 
@@ -188,7 +233,12 @@ export default function DashboardScreen({ navigation }) {
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
       <AppHeader title="MomsKitchen" subtitle="Delivering happiness" />
 
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#0C3415']} />
+        }
+      >
         <View style={{ paddingTop: 20, paddingHorizontal: 10 }}>
           <AddressBar
             address={addresses.find((a) => a.is_default) || addresses[0]}
@@ -208,16 +258,40 @@ export default function DashboardScreen({ navigation }) {
           </View>
 
           <View style={{ marginVertical: 8 }}>
-            {todaysMenus.length > 0 ? (
-              <HorizontalFoodList
-                data={todaysMenus}
-                onLongPressStart={handleLongPressStart}
-                onLongPressEnd={handleLongPressEnd}
-                onPress={handleMenuPress}
-                loading={loading}
-              />
+            {canOrder ? (
+              todaysMenus.length > 0 ? (
+                <HorizontalFoodList
+                  data={todaysMenus}
+                  onLongPressStart={handleLongPressStart}
+                  onLongPressEnd={handleLongPressEnd}
+                  onPress={handleMenuPress}
+                  loading={loading}
+                />
+              ) : (
+                !loading && <Text style={styles.noMenuText}>No menus available today 🍱</Text>
+              )
             ) : (
-              !loading && <Text style={styles.noMenuText}>No menus available today 🍱</Text>
+              <View style={styles.closedContainer}>
+                <Image
+                  source={require('../../../assets/images/closed-kitchen.png')}
+                  style={styles.closedImage}
+                  resizeMode="contain"
+                />
+                <Text style={styles.closedTitle}>Kitchen is Closed 🌙</Text>
+                <Text style={styles.closedSubtitle}>
+                  We are currently not accepting orders.
+                </Text>
+                <Text style={styles.closedTimeText}>
+                  Ordering allowed only between:
+                </Text>
+                <View style={styles.timePillsContainer}>
+                  {settings?.orderingWindows?.map((w, i) => (
+                    <View key={i} style={styles.timePill}>
+                      <Text style={styles.timePillText}>{w.start} - {w.end}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
             )}
           </View>
         </View>
@@ -337,6 +411,37 @@ export default function DashboardScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   noMenuText: { textAlign: 'center', fontSize: 16, color: '#777', marginTop: 20 },
+  loader: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFEBEE',
+    marginHorizontal: 20,
+    marginBottom: 16,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FFCDD2',
+  },
+  closedText: {
+    color: '#B00020',
+    marginLeft: 8,
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
+  },
+  disabledButton: {
+    backgroundColor: '#ccc',
+  },
+  loader: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
   momDetailsCard: { backgroundColor: 'white', borderRadius: 20, padding: 20, margin: 20, alignItems: 'center' },
   chefImage: { width: 80, height: 80, borderRadius: 40, marginBottom: 10 },
@@ -349,4 +454,60 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 18, fontWeight: '600', marginBottom: 8 },
   addrRow: { paddingVertical: 8, flexDirection: 'row', alignItems: 'center' },
   input: { marginBottom: 10 },
+  closedContainer: {
+    alignItems: 'center',
+    padding: 24,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    marginTop: 10,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  closedImage: {
+    width: 120,
+    height: 120,
+    marginBottom: 16,
+    opacity: 0.8,
+  },
+  closedTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#B00020',
+    marginBottom: 8,
+  },
+  closedSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  closedTimeText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 12,
+  },
+  timePillsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  timePill: {
+    backgroundColor: '#FFF3E0',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#FFE0B2',
+    margin: 4,
+  },
+  timePillText: {
+    color: '#E65100',
+    fontWeight: '600',
+    fontSize: 13,
+  },
 });

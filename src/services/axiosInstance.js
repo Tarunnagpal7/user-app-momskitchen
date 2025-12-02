@@ -2,9 +2,9 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { store } from '../store/store';
 import { refreshTokenSuccess, logout } from '../store/store';
-// import { getBackendUrl } from '../utils/getBackendUrl';
+import { getBackendUrl } from '../utils/getBackendUrl';
 
-const api = axios.create({ baseURL: process.env.EXPO_PUBLIC_BACKEND_URL });
+const api = axios.create({ baseURL: getBackendUrl() });
 
 let isRefreshing = false;
 let failedQueue = [];
@@ -50,12 +50,15 @@ api.interceptors.response.use(
 
       originalRequest._retry = true;
       isRefreshing = true;
+
       try {
         const res = await axios.post(`${getBackendUrl()}/api/auth/refresh`, {
           refresh_token: refreshToken,
         });
+
         const newAccessToken = res.data.data.accessToken;
         store.dispatch(refreshTokenSuccess(newAccessToken));
+
         processQueue(null, newAccessToken);
         originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
         return api(originalRequest);

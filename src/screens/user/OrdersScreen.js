@@ -6,10 +6,11 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
+  Alert,
 } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Card, useTheme, ActivityIndicator } from "react-native-paper";
-import { OrderService } from "../../services/userServices";
+import { OrderService, settingsService } from "../../services/userServices";
 
 const STATUS_TABS = ["pending", "delivered", "cancelled"];
 
@@ -17,25 +18,42 @@ export default function OrdersScreen() {
   const theme = useTheme();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [canCancel, setCanCancel] = useState(false);
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState("pending");
   const [selectedOrder, setSelectedOrder] = useState(null);
 
-  const updateOrderLocally = (id, payload) => {
-    setOrders((prev) =>
-      prev.map((order) =>
-        order._id === id
-          ? {
-              ...order,
-              ...payload,
-            }
-          : order
-      )
-    );
+  const [settings, setSettings] = useState(null);
+
+  const loadSettings = async () => {
+    try {
+      const res = await settingsService.getSettings();
+      const fetchedSettings = res.data?.data?.settings;
+      setSettings(fetchedSettings);
+      checkCancellationTime(fetchedSettings);
+    } catch (e) {
+      console.log("Load Settings Error:", e);
+    }
   };
 
-  // Load orders
-  const load = async () => {
+  const checkCancellationTime = (currentSettings) => {
+    // Use ordering windows as cancellation windows for now, or add specific cancellationWindows to settings if needed.
+    // Assuming cancellation allowed during ordering hours.
+    if (!currentSettings?.orderingWindows) return;
+
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    const currentTimeStr = `${currentHour.toString().padStart(2, '0')}:${currentMinute.toString().padStart(2, '0')}`;
+
+    const isTime = currentSettings.orderingWindows.some(window => {
+      return currentTimeStr >= window.start && currentTimeStr <= window.end;
+    });
+
+    setCanCancel(isTime);
+  };
+
+  const loadOrders = async () => {
     setLoading(true);
     setError("");
     try {
@@ -49,17 +67,66 @@ export default function OrdersScreen() {
   };
 
   useEffect(() => {
-    load();
+    loadOrders();
+    loadSettings();
   }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (settings) checkCancellationTime(settings);
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [settings]);
+
+  const handleCancelPress = (order) => {
+    if (!canCancel) {
+      alert("Cancellations are only allowed during ordering hours.");
+      return;
+    }
+
+    let message = "Are you sure you want to cancel this order?";
+
+    if (order.payment_status === 'paid') {
+      const penalty = (order.delivery_fee || 0) + (order.tax || 0);
+      const refund = order.total_amount - penalty;
+
+      message += `\n\nRefund Breakdown:\n` +
+        `• Total Amount: ₹${order.total_amount}\n` +
+        `• Cancellation Penalty (Delivery + Tax): -₹${penalty}\n` +
+        `• Estimated Refund: ₹${refund}\n\n` +
+        `The refund will be processed after admin approval.`;
+    }
+
+    Alert.alert(
+      "Cancel Order",
+      message,
+      [
+        { text: "No", style: "cancel" },
+        { text: "Yes, Cancel", style: "destructive", onPress: () => cancelOrder(order._id) }
+      ]
+    );
+  };
 
   const cancelOrder = async (id) => {
     try {
       const res = await OrderService.cancel(id);
       const updated = res?.data?.data?.order ||
         res?.data?.data || { status: "cancelled" };
-      updateOrderLocally(id, { ...updated, status: "cancelled" });
+
+      // Update local state
+      setOrders((prev) =>
+        prev.map((order) =>
+          order._id === id ? { ...order, ...updated, status: "cancelled" } : order
+        )
+      );
+
+      if (selectedOrder?._id === id) {
+        setSelectedOrder({ ...selectedOrder, ...updated, status: "cancelled" });
+      }
+
+      alert("Order cancelled successfully");
     } catch (e) {
-      alert("Failed to cancel order");
+      alert(e?.response?.data?.message || "Failed to cancel order");
     }
   };
 
@@ -122,7 +189,7 @@ export default function OrdersScreen() {
             {orders.length} total orders
           </Text>
         </View>
-        <TouchableOpacity onPress={load} style={styles.refreshBtn}>
+        <TouchableOpacity onPress={loadOrders} style={styles.refreshBtn}>
           <MaterialCommunityIcons name="refresh" size={24} color="#0C3415" />
         </TouchableOpacity>
       </View>
@@ -246,27 +313,41 @@ export default function OrdersScreen() {
               style={[
                 styles.paymentStatus,
                 {
-                  color: item.payment_status === "paid" ? "#4CAF50" : "#FF9800",
+                  color: item.payment_status === "paid" ? "#4CAF50" : item.payment_status === "refunded" ? "#2196F3" : "#FF9800",
                 },
               ]}
             >
-              {item.payment_status}
+              {item.payment_status === "refunded" ? "Refunded" : item.payment_status}
             </Text>
           </View>
 
+          {/* Refund Amount Display */}
+          {item.payment_status === "refunded" && item.refund_amount > 0 && (
+            <View style={styles.infoRow}>
+              <View style={styles.infoItem}>
+                <MaterialCommunityIcons name="cash-refund" size={16} color="#2196F3" />
+                <Text style={styles.infoLabel}>Refunded Amount</Text>
+              </View>
+              <Text style={[styles.amount, { color: "#2196F3" }]}>₹{item.refund_amount}</Text>
+            </View>
+          )}
+
           {/* Action Button */}
-          {["pending", "confirmed"].includes(item.status) && (
+          {['pending', 'confirmed'].includes(item.status) && (
             <TouchableOpacity
-              style={styles.cancelBtn}
-              onPress={() => cancelOrder(item._id)}
+              style={[styles.cancelBtn, !canCancel && styles.disabledButton]}
+              onPress={() => handleCancelPress(item)}
               activeOpacity={0.7}
+              disabled={!canCancel}
             >
               <MaterialCommunityIcons
                 name="close-circle-outline"
                 size={18}
-                color="#B00020"
+                color={!canCancel ? "#999" : "#B00020"}
               />
-              <Text style={styles.cancelBtnText}>Cancel Order</Text>
+              <Text style={[styles.cancelBtnText, !canCancel && { color: "#999" }]}>
+                {canCancel ? "Cancel Order" : "Cancellation Closed"}
+              </Text>
             </TouchableOpacity>
           )}
         </View>
@@ -319,12 +400,21 @@ export default function OrdersScreen() {
             <Text
               style={[
                 styles.paymentStatus,
-                { color: o.payment_status === "paid" ? "#4CAF50" : "#FF9800" },
+                { color: o.payment_status === "paid" ? "#4CAF50" : o.payment_status === "refunded" ? "#2196F3" : "#FF9800" },
               ]}
             >
-              Payment: {o.payment_status}
+              Payment: {o.payment_status === "refunded" ? "Refunded" : o.payment_status}
             </Text>
           </View>
+
+          {/* Refund Amount in Details */}
+          {o.payment_status === "refunded" && o.refund_amount > 0 && (
+            <View style={[styles.detailAmountRow, { marginTop: 8 }]}>
+              <Text style={[styles.detailAmount, { color: "#2196F3", fontSize: 16 }]}>
+                Refunded: ₹{o.refund_amount}
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* Menu Details Section */}
@@ -381,6 +471,28 @@ export default function OrdersScreen() {
           </View>
         </View>
 
+        {/* Cancel Button in Details */}
+        {['pending', 'confirmed'].includes(o.status) && (
+          <View style={{ paddingHorizontal: 16, marginBottom: 40 }}>
+            <TouchableOpacity
+              style={[styles.cancelBtn, !canCancel && styles.disabledButton]}
+              onPress={() => handleCancelPress(o)}
+              activeOpacity={0.7}
+              disabled={!canCancel}
+            >
+              <MaterialCommunityIcons
+                name="close-circle-outline"
+                size={20}
+                color={!canCancel ? "#999" : "#B00020"}
+              />
+              <Text style={[styles.cancelBtnText, !canCancel && { color: "#999" }]}>
+                {canCancel ? "Cancel Order" : "Cancellation Closed"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+
         {/* Delivery Address Section */}
         <View style={[styles.section, { marginBottom: 30 }]}>
           <View style={styles.sectionHeader}>
@@ -410,7 +522,7 @@ export default function OrdersScreen() {
             </View>
           </View>
         </View>
-      </ScrollView>
+      </ScrollView >
     );
   };
 
@@ -432,7 +544,7 @@ export default function OrdersScreen() {
             color="#E57373"
           />
           <Text style={styles.error}>{error}</Text>
-          <TouchableOpacity onPress={load} style={styles.retryBtn}>
+          <TouchableOpacity onPress={loadOrders} style={styles.retryBtn}>
             <Text style={styles.retryBtnText}>Retry</Text>
           </TouchableOpacity>
         </View>
@@ -457,7 +569,7 @@ export default function OrdersScreen() {
           renderItem={renderCard}
           contentContainerStyle={styles.listContainer}
           refreshing={loading}
-          onRefresh={load}
+          onRefresh={loadOrders}
           showsVerticalScrollIndicator={false}
         />
       )}
@@ -652,8 +764,12 @@ const styles = StyleSheet.create({
   },
   cancelBtnText: {
     color: "#B00020",
-    fontWeight: "700",
+    fontWeight: "600",
     fontSize: 14,
+  },
+  disabledButton: {
+    opacity: 0.5,
+    backgroundColor: '#f0f0f0',
   },
   emptyContainer: {
     flex: 1,

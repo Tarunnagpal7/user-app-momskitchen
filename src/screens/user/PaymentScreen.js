@@ -60,15 +60,44 @@ export default function PaymentScreen() {
 
   const addressId = address[0]?._id;
 
+
+
   // 🧮 Calculate totals
-  const subtotal = cartItems.reduce(
-    (total, item) =>
-      total + parseFloat(item.price.replace("₹", "")) * item.quantity,
-    0
-  );
-  const deliveryFee = 30;
-  const tax = subtotal * 0.15;
-  const total = subtotal + deliveryFee + tax;
+  const [deliveryFee, setDeliveryFee] = useState(0);
+  const [tax, setTax] = useState(0);
+  const [total, setTotal] = useState(0);
+  const [subtotal, setSubtotal] = useState(0);
+
+  useEffect(() => {
+    const calculateTotals = async () => {
+      if (!addressId || cartItems.length === 0) return;
+
+      try {
+        const orders = cartItems.map((item) => ({
+          menu_id: item.id,
+          items: item.quantity,
+        }));
+
+        const payload = {
+          orders,
+          delivery_address_id: addressId,
+        };
+
+        const response = await OrderService.calculate(payload);
+        if (response.data && response.data.status === 'success') {
+          const { subtotal, delivery_fee, tax, total_amount } = response.data.data;
+          setSubtotal(subtotal);
+          setDeliveryFee(delivery_fee);
+          setTax(tax);
+          setTotal(total_amount);
+        }
+      } catch (error) {
+        console.error("Error calculating order details:", error);
+      }
+    };
+
+    calculateTotals();
+  }, [addressId, cartItems]);
 
   const handlePaymentSelect = (method) => setSelectedPayment(method);
 
@@ -216,8 +245,7 @@ export default function PaymentScreen() {
 
     Alert.alert(
       "Confirm Your Order",
-      `Proceed to ${
-        selectedPayment === "online" ? "Online Payment" : "Cash on Delivery"
+      `Proceed to ${selectedPayment === "online" ? "Online Payment" : "Cash on Delivery"
       } for INR ${total.toFixed(2)}?`,
       [
         { text: "Cancel", style: "cancel" },

@@ -7,16 +7,22 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
-  SafeAreaView,
-  StatusBar
+  StatusBar,
+  Dimensions,
+  Platform
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useCart } from '../../context/CartContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+const { width } = Dimensions.get('window');
 
 export default function MenuDetailScreen({ route, navigation }) {
   const { menu } = route.params || {};
   const [quantity, setQuantity] = useState(1);
   const { addToCart, cartItems } = useCart();
+  const insets = useSafeAreaInsets();
 
   if (!menu) {
     return (
@@ -26,7 +32,7 @@ export default function MenuDetailScreen({ route, navigation }) {
     );
   }
 
-  // ✅ Safe menu data mapping (fixed for your current API structure)
+  // Safe menu data mapping
   const menuData = {
     id: menu.id || menu._id,
     name: menu.name || 'Special Menu',
@@ -38,9 +44,7 @@ export default function MenuDetailScreen({ route, navigation }) {
     price: menu.price || `₹${menu.total_cost || 0}`,
     totalCost: menu.total_cost || (menu.price ? parseInt(menu.price.replace(/[₹,]/g, '')) : 0),
     remaining_orders: menu.remaining_orders || menu.max_orders || 0,
-    menuImage: typeof menu.menuImage === 'number'
-      ? menu.menuImage
-      : require('../../../assets/images/food_1.png'),
+    menuImage: menu.menuImage || (menu.image?.url ? { uri: menu.image.url } : require('../../../assets/images/food_1.png')),
     items: menu.items || [],
   };
 
@@ -71,7 +75,6 @@ export default function MenuDetailScreen({ route, navigation }) {
       [{ text: 'OK' }]
     );
 
-    // ✅ Fixed syntax issue (removed stray line)
     navigation.goBack();
   };
 
@@ -84,154 +87,346 @@ export default function MenuDetailScreen({ route, navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
-      <LinearGradient
-        colors={['#effef0', '#effef0']}
-        style={styles.container}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-      >
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-          {/* Header */}
-          <View style={styles.header}>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }} bounces={false}>
+        {/* Hero Image Section */}
+        <View style={styles.imageContainer}>
+          <Image source={menuData.menuImage} style={styles.heroImage} />
+          <LinearGradient
+            colors={['rgba(0,0,0,0.6)', 'transparent']}
+            style={[styles.gradientOverlay, { paddingTop: insets.top }]}
+          >
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-              <Text style={styles.backButtonText}>← Back</Text>
+              <MaterialCommunityIcons name="arrow-left" size={28} color="#fff" />
             </TouchableOpacity>
-          </View>
+          </LinearGradient>
+        </View>
 
-          {/* Menu Image */}
-          <View style={styles.imageContainer}>
-            <Image 
-              source={menuData.menuImage} 
-              style={styles.menuImage} 
-            />
-          </View>
+        {/* Content Container */}
+        <View style={styles.contentContainer}>
+          {/* Header Info */}
+          <View style={styles.headerInfo}>
+            <View style={styles.titleRow}>
+              <Text style={styles.menuName}>{menuData.name}</Text>
+              <View style={styles.ratingBadge}>
+                <MaterialCommunityIcons name="star" size={16} color="#fff" />
+                <Text style={styles.ratingText}>{menuData.mom_rating.average}</Text>
+              </View>
+            </View>
 
-          {/* Remaining Orders */}
-          <View style={styles.ordersInfo}>
-            <Text style={styles.ordersText}>
-              {menuData.remaining_orders} orders remaining
-            </Text>
-          </View>
+            <Text style={styles.price}>{menuData.price}</Text>
 
-          {/* Menu Info */}
-          <View style={styles.menuInfo}>
-            <Text style={styles.menuName}>{menuData.name}</Text>
-            <Text style={styles.businessName}>By {menuData.mom_name}</Text>
             {menuData.description && (
-              <Text style={styles.menuDescription}>{menuData.description}</Text>
+              <Text style={styles.description}>{menuData.description}</Text>
             )}
-            <View style={styles.ratingContainer}>
-              <Text style={styles.rating}>⭐ {menuData.mom_rating.average || '4.5'}</Text>
-              <Text style={styles.price}>{menuData.price}</Text>
+
+            <View style={styles.ordersBadge}>
+              <MaterialCommunityIcons name="fire" size={16} color="#E65100" />
+              <Text style={styles.ordersText}>Only {menuData.remaining_orders} orders left!</Text>
             </View>
           </View>
+
+          <View style={styles.divider} />
+
+          {/* Chef Profile */}
+          <View style={styles.chefSection}>
+            <Text style={styles.sectionTitle}>Prepared by</Text>
+            <View style={styles.chefCard}>
+              <Image source={require('../../../assets/images/chef.png')} style={styles.chefAvatar} />
+              <View style={styles.chefInfo}>
+                <Text style={styles.chefName}>{menuData.mom_name}</Text>
+                <Text style={styles.businessName}>{menuData.mom_business_name}</Text>
+                <Text style={styles.chefBio} numberOfLines={2}>{menuData.mom_description}</Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.divider} />
 
           {/* Menu Items */}
           {menuData.items.length > 0 && (
             <View style={styles.itemsSection}>
-              <Text style={styles.sectionTitle}>Menu Items</Text>
+              <Text style={styles.sectionTitle}>What's Included</Text>
               {menuData.items
                 .filter(item => item?.item_name)
                 .map((item, index) => (
-                  <View key={index} style={styles.itemCard}>
-                    <View style={styles.itemInfo}>
+                  <View key={index} style={styles.itemRow}>
+                    <View style={styles.bulletPoint} />
+                    <View style={{ flex: 1 }}>
                       <Text style={styles.itemName}>{item.item_name}</Text>
                       {item.description && (
-                        <Text style={styles.itemDescription}>{item.description}</Text>
+                        <Text style={styles.itemDesc}>{item.description}</Text>
                       )}
                     </View>
-                    {/* <View style={styles.vegIndicator}>
-                      <Text
-                        style={[
-                          styles.vegText,
-                          { color: item.veg ? '#4CAF50' : '#F44336' },
-                        ]}
-                      >
-                        {item.veg ? 'VEG' : 'NON-VEG'}
-                      </Text> */}
-                    {/* </View> */}
                   </View>
-              ))}
+                ))}
             </View>
           )}
+        </View>
+      </ScrollView>
 
-          {/* Mom Details */}
-          {menuData.mom_name !== 'Unknown Chef' && (
-            <View style={styles.momSection}>
-              <Text style={styles.sectionTitle}>About the Chef</Text>
-              <View style={styles.momCard}>
-                <Image source={require('../../../assets/images/chef.png')} style={styles.chefImage} />
-                <View style={styles.momInfo}>
-                  <Text style={styles.momName}>{menuData.mom_name}</Text>
-                  <Text style={styles.momName}> {menuData.mom_business_name}</Text>
-                  <Text style={styles.momDescription}>{menuData.mom_description}</Text>
-                </View>
-              </View>
-            </View>
-          )}
-        </ScrollView>
-
-        {/* Sticky Bottom Bar */}
-        <View style={styles.stickyBar}>
-          <View style={styles.quantitySelector}>
-            <TouchableOpacity onPress={decrementQuantity} style={styles.quantityButton}>
-              <Text style={styles.quantityButtonText}>-</Text>
-            </TouchableOpacity>
-            <Text style={styles.quantityText}>{quantity}</Text>
-            <TouchableOpacity onPress={incrementQuantity} style={styles.quantityButton}>
-              <Text style={styles.quantityButtonText}>+</Text>
-            </TouchableOpacity>
-          </View>
-          <TouchableOpacity onPress={handleAddToCart} style={styles.addToCartButton}>
-            <Text style={styles.addToCartText}>
-              Add to Cart - {quantity} x ₹{menuData.totalCost}
-            </Text>
+      {/* Bottom Action Bar */}
+      <View style={[styles.bottomBar, { paddingBottom: insets.bottom || 20 }]}>
+        <View style={styles.quantityContainer}>
+          <TouchableOpacity onPress={decrementQuantity} style={styles.qtyBtn}>
+            <MaterialCommunityIcons name="minus" size={20} color="#333" />
+          </TouchableOpacity>
+          <Text style={styles.qtyText}>{quantity}</Text>
+          <TouchableOpacity onPress={incrementQuantity} style={styles.qtyBtn}>
+            <MaterialCommunityIcons name="plus" size={20} color="#333" />
           </TouchableOpacity>
         </View>
-      </LinearGradient>
-    </SafeAreaView>
+
+        <TouchableOpacity onPress={handleAddToCart} style={styles.addToCartBtn}>
+          <Text style={styles.addToCartText}>Add to Cart</Text>
+          <Text style={styles.totalPrice}>₹{menuData.totalCost * quantity}</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  scrollContent: { paddingBottom: 140 },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 50, paddingBottom: 10 },
-  backButton: { padding: 10 },
-  backButtonText: { fontSize: 18, color: '#333', fontWeight: '600' },
-  imageContainer: { alignItems: 'center', marginVertical: 20 },
-  menuImage: { width: 200, height: 200, borderRadius: 100 },
-  menuInfo: { paddingHorizontal: 20, marginBottom: 20 },
-  menuName: { fontSize: 24, fontWeight: 'bold', color: '#333', marginBottom: 5 },
-  businessName: { fontSize: 18, color: '#666', marginBottom: 10 },
-  menuDescription: { fontSize: 16, color: '#888', lineHeight: 24, marginBottom: 15 },
-  ratingContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  rating: { fontSize: 18, fontWeight: 'bold', color: '#FF6B35' },
-  price: { fontSize: 20, fontWeight: 'bold', color: '#4CAF50' },
-  ordersInfo: { backgroundColor: '#FFF3E0', padding: 10, borderRadius: 8, marginHorizontal: 20, marginBottom: 16 },
-  ordersText: { fontSize: 14, color: '#E65100', textAlign: 'center', fontWeight: '600' },
-  momSection: { paddingHorizontal: 20, marginBottom: 20 },
-  sectionTitle: { fontSize: 20, fontWeight: 'bold', color: '#333', marginBottom: 15 },
-  momCard: { flexDirection: 'row', backgroundColor: 'white', padding: 15, borderRadius: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
-  chefImage: { width: 60, height: 60, borderRadius: 30, marginRight: 15 },
-  momInfo: { flex: 1 },
-  momName: { fontSize: 18, fontWeight: 'bold', color: '#333', marginBottom: 5 },
-  momDescription: { fontSize: 14, color: '#666', lineHeight: 20 },
-  itemsSection: { paddingHorizontal: 20, marginBottom: 20 },
-  itemCard: { flexDirection: 'row', backgroundColor: 'white', padding: 15, borderRadius: 12, marginBottom: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 },
-  itemInfo: { flex: 1 },
-  itemName: { fontSize: 16, fontWeight: 'bold', color: '#333', marginBottom: 5 },
-  itemDescription: { fontSize: 14, color: '#666', marginBottom: 5 },
-  vegIndicator: { justifyContent: 'center' },
-  vegText: { fontSize: 12, fontWeight: 'bold' },
-  stickyBar: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 20, backgroundColor: 'white' },
-  quantitySelector: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
-  quantityButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#FF6B35', justifyContent: 'center', alignItems: 'center' },
-  quantityButtonText: { fontSize: 20, fontWeight: 'bold', color: 'white' },
-  quantityText: { fontSize: 20, fontWeight: 'bold', marginHorizontal: 20, color: '#333' },
-  addToCartButton: { backgroundColor: '#FF6B35', paddingVertical: 15, borderRadius: 25, alignItems: 'center' },
-  addToCartText: { fontSize: 18, fontWeight: 'bold', color: 'white' },
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageContainer: {
+    height: 300,
+    width: '100%',
+    position: 'relative',
+  },
+  heroImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  gradientOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 100,
+    paddingHorizontal: 20,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  contentContainer: {
+    flex: 1,
+    backgroundColor: '#fff',
+    marginTop: -30,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    paddingHorizontal: 24,
+    paddingTop: 30,
+  },
+  headerInfo: {
+    marginBottom: 24,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  menuName: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1a1a1a',
+    flex: 1,
+    marginRight: 10,
+  },
+  ratingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FF6B35',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  ratingText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    marginLeft: 4,
+    fontSize: 12,
+  },
+  price: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#4CAF50',
+    marginBottom: 12,
+  },
+  description: {
+    fontSize: 15,
+    color: '#666',
+    lineHeight: 22,
+    marginBottom: 16,
+  },
+  ordersBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF3E0',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  ordersText: {
+    color: '#E65100',
+    fontWeight: '600',
+    marginLeft: 6,
+    fontSize: 13,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#f0f0f0',
+    marginVertical: 24,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    marginBottom: 16,
+  },
+  chefCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f9f9f9',
+    padding: 16,
+    borderRadius: 16,
+  },
+  chefAvatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    marginRight: 16,
+  },
+  chefInfo: {
+    flex: 1,
+  },
+  chefName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    marginBottom: 2,
+  },
+  businessName: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 4,
+  },
+  chefBio: {
+    fontSize: 12,
+    color: '#888',
+  },
+  itemsSection: {
+    marginBottom: 20,
+  },
+  itemRow: {
+    flexDirection: 'row',
+    marginBottom: 16,
+  },
+  bulletPoint: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#4CAF50',
+    marginTop: 8,
+    marginRight: 12,
+  },
+  itemName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 2,
+  },
+  itemDesc: {
+    fontSize: 13,
+    color: '#888',
+  },
+  bottomBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 10,
+  },
+  quantityContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    borderRadius: 12,
+    padding: 4,
+    marginRight: 16,
+  },
+  qtyBtn: {
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  qtyText: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginHorizontal: 16,
+    color: '#1a1a1a',
+  },
+  addToCartBtn: {
+    flex: 1,
+    backgroundColor: '#FF6B35',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderRadius: 16,
+    shadowColor: '#FF6B35',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  addToCartText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  totalPrice: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+    opacity: 0.9,
+  },
 });

@@ -4,7 +4,7 @@ import { View, Text, TouchableOpacity, StatusBar, StyleSheet, TextInput as RNTex
 import { useTheme } from 'react-native-paper';
 import { useDispatch } from 'react-redux';
 import { AuthService } from '../../services/userServices';
-import { loginSuccess, persistAuth } from '../../store/store';
+import { loginSuccess } from '../../store/store';
 
 export default function OtpScreen({ route, navigation }) {
   const theme = useTheme();
@@ -38,16 +38,25 @@ export default function OtpScreen({ route, navigation }) {
     }
     setLoading(true);
     try {
+      console.log('Verifying OTP for:', phone, 'Code:', code);
       const res = await AuthService.login(phone, code);
+      console.log('OTP Verify Response:', res.data);
+
       const { accessToken, refreshToken } = res.data.data;
       dispatch(loginSuccess({ accessToken, refreshToken, user: res.data.data.user }));
-      await persistAuth({ accessToken, refreshToken, user: res.data.data.user });
-      if(res.data.data.user.is_active){
+      // await persistAuth({ accessToken, refreshToken, user: res.data.data.user }); // Removed as redux-persist handles it
+
+      if (res.data.data.user.is_active) {
         navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
-      }else{
+      } else {
         navigation.reset({ index: 0, routes: [{ name: 'Preferences' }] });
       }
     } catch (e) {
+      console.error('OTP Verify Error:', e);
+      if (e.response) {
+        console.error('Error Response Data:', e.response.data);
+        console.error('Error Status:', e.response.status);
+      }
       setError(e?.response?.data?.message || 'Failed to verify OTP');
     } finally {
       setLoading(false);

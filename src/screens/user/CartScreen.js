@@ -11,17 +11,69 @@ import {
   Alert
 } from 'react-native';
 import { useCart } from '../../context/CartContext';
+import { settingsService } from '../../services/userServices';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from 'react-native-paper';
+import { useState, useEffect } from 'react';
 
 const CartScreen = ({ navigation }) => {
   const theme = useTheme();
   const gradientColors = ['#effef0', '#effef0'];
   const { cartItems, updateQuantity, removeFromCart, getCartTotal, clearCart } = useCart();
-  console.log(cartItems)
+  const [loading, setLoading] = useState(false);
+  const [canCheckout, setCanCheckout] = useState(false);
 
-  const handleCheckout = () => {
+  const [settings, setSettings] = useState(null);
+
+  const loadSettings = async () => {
+    try {
+      const res = await settingsService.getSettings();
+      const fetchedSettings = res.data?.data?.settings;
+      setSettings(fetchedSettings);
+      checkOrderingTime(fetchedSettings);
+    } catch (e) {
+      console.log("Load Settings Error:", e);
+    }
+  };
+
+  const checkOrderingTime = (currentSettings) => {
+    if (!currentSettings?.orderingWindows) return;
+
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    const currentTimeStr = `${currentHour.toString().padStart(2, '0')}:${currentMinute.toString().padStart(2, '0')}`;
+
+    const isTime = currentSettings.orderingWindows.some(window => {
+      return currentTimeStr >= window.start && currentTimeStr <= window.end;
+    });
+
+    setCanCheckout(isTime);
+
+    // Auto clear cart if time is up and cart has items
+    if (!isTime && cartItems.length > 0) {
+      clearCart();
+      Alert.alert(
+        "Kitchen Closed",
+        "Sorry, the kitchen is now closed. Your cart has been cleared as we cannot accept orders at this time."
+      );
+      navigation.goBack();
+    }
+  };
+
+  useEffect(() => {
+    loadSettings();
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (settings) checkOrderingTime(settings);
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [settings, cartItems]);
+
+  const calculateTotal = () => {
     if (cartItems.length === 0) {
       Alert.alert('Cart Empty', 'Please add items to your cart before checkout');
       return;
@@ -34,7 +86,7 @@ const CartScreen = ({ navigation }) => {
     <View style={styles.emptyCartContainer}>
       <Ionicons name="cart-outline" size={80} color="#ccc" />
       <Text style={styles.emptyCartText}>Your cart is empty</Text>
-      <TouchableOpacity 
+      <TouchableOpacity
         style={styles.browseButton}
         onPress={() => navigation.navigate('Main')}
       >
@@ -45,27 +97,27 @@ const CartScreen = ({ navigation }) => {
 
   const renderCartItem = ({ item }) => (
     <View style={styles.cartItem} key={`cart-item-${item.id}`}>
-            <Image 
+      <Image
         source={
-            item.image && item.image.length > 0
+          item.image && item.image.length > 0
             ? { uri: item.image }
             : require('../../../assets/images/food-platter.png')
-        } 
+        }
         style={styles.itemImage}
-        />
-      
+      />
+
       <View style={styles.itemDetails}>
         <Text style={styles.itemName}>{item.name}</Text>
         <Text style={styles.itemPrice}>{item.price}</Text>
       </View>
-      
+
       <View style={styles.quantityContainer}>
-        
+
         <Text style={styles.quantityText}>{item.quantity}</Text>
-        
+
       </View>
-      
-      <TouchableOpacity 
+
+      <TouchableOpacity
         style={styles.removeButton}
         onPress={() => removeFromCart(item.id)}
       >
@@ -77,7 +129,7 @@ const CartScreen = ({ navigation }) => {
   return (
     <LinearGradient colors={gradientColors} style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
-      
+
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={theme.colors.primary} />
@@ -94,11 +146,11 @@ const CartScreen = ({ navigation }) => {
               ]
             );
           }}>
-            <Text style={[styles.clearCartText, {color: theme.colors.primary}]}>Clear</Text>
+            <Text style={[styles.clearCartText, { color: theme.colors.primary }]}>Clear</Text>
           </TouchableOpacity>
         )}
       </View>
-      
+
       {cartItems.length > 0 ? (
         <>
           <FlatList
@@ -107,23 +159,27 @@ const CartScreen = ({ navigation }) => {
             keyExtractor={item => item.id}
             contentContainerStyle={styles.cartList}
           />
-          
+
           <View style={styles.footer}>
-            <View style={styles.summaryContainer}>
-              
-              <View style={styles.divider} />
-              
-              <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>Subtotal:</Text>
-                <Text style={styles.totalAmount}>₹{(getCartTotal()).toFixed(2)}</Text>
-              </View>
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Total Amount</Text>
+              <Text style={styles.totalAmount}>₹{(getCartTotal()).toFixed(2)}</Text>
             </View>
-            
-            <TouchableOpacity 
-              style={[styles.checkoutButton, {backgroundColor: theme.colors.primary}]} 
-              onPress={handleCheckout}
+
+            {!canCheckout && (
+              <Text style={styles.closedText}>
+                Kitchen Closed. Ordering allowed: 9am-12pm & 5pm-8pm
+              </Text>
+            )}
+
+            <TouchableOpacity
+              style={[styles.checkoutButton, { backgroundColor: theme.colors.primary }, !canCheckout && styles.disabledButton]}
+              onPress={calculateTotal}
+              disabled={!canCheckout}
             >
-              <Text style={styles.checkoutButtonText}>Proceed to Checkout</Text>
+              <Text style={styles.checkoutButtonText}>
+                {canCheckout ? 'Proceed to Checkout' : 'Kitchen Closed'}
+              </Text>
             </TouchableOpacity>
           </View>
         </>
@@ -315,6 +371,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  disabledButton: {
+    backgroundColor: '#ccc',
+  },
+  closedText: {
+    color: '#B00020',
+    textAlign: 'center',
+    marginBottom: 8,
+    fontSize: 12,
+    fontWeight: '500',
+  },
 });
-   
+
 export default CartScreen;
