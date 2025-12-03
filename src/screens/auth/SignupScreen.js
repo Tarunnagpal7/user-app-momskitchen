@@ -31,6 +31,7 @@ export default function SignupScreen({ navigation }) {
     setLoading(true);
     try {
       await AuthService.signup({ name, phone_number: phone, role: "customer" });
+      await AuthService.sendOtp(phone);
       navigation.navigate("Otp", { phone });
     } catch (e) {
       setError(e?.response?.data?.message || "Failed to sign up");

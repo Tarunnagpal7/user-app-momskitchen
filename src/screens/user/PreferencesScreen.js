@@ -2,14 +2,17 @@ import { LinearGradient } from 'expo-linear-gradient';
 import React, { useState } from 'react';
 import { StatusBar, StyleSheet, Text, TouchableOpacity, View, ScrollView } from 'react-native';
 import { useTheme } from 'react-native-paper';
+import { useDispatch } from 'react-redux';
 import { UserService } from '../../services/userServices';
+import { setUser } from '../../store/store';
 
-export default function PreferencesScreen({ navigation }){
+export default function PreferencesScreen({ navigation }) {
   const theme = useTheme();
   const [veg_pref, setVegPref] = useState('both');
   const [authenticity, setAuthenticity] = useState('Any');
   const [fav_dishes, setFavDishes] = useState('');
   const [loading, setLoading] = useState(false);
+  const dispatch = useDispatch();
 
   const gradientColors = theme.colors?.gradient || ['#FFFFFF', '#F8FDF9'];
   const primaryColor = theme.colors?.primary || '#0C3415';
@@ -19,7 +22,7 @@ export default function PreferencesScreen({ navigation }){
   const shadowColor = theme.colors?.shadow || '#0C3415';
   const accentColor = theme.colors?.accent || '#81C784';
 
-  const authenticityOptions = ['North Indian','South Indian','East Indian','West Indian','Fusion','Any'];
+  const authenticityOptions = ['North Indian', 'South Indian', 'East Indian', 'West Indian', 'Fusion', 'Any'];
   const foodTypeOptions = [
     { value: 'veg', label: 'Vegetarian' },
     { value: 'nonveg', label: 'Non-Vegetarian' },
@@ -32,10 +35,13 @@ export default function PreferencesScreen({ navigation }){
       // Backend expects fav_dishes to be one of allowed strings, we'll only send when provided
       const payload = { veg_pref, authenticity };
       if (fav_dishes && typeof fav_dishes === 'string') payload.fav_dishes = fav_dishes;
-      await UserService.addPreferences(payload);
+      const res = await UserService.addPreferences(payload);
+      if (res.data?.data?.user) {
+        dispatch(setUser(res.data.data.user));
+      }
       setLoading(false);
       navigation.navigate('Address')
-    } catch(e){
+    } catch (e) {
       setLoading(false);
       alert(e?.response?.data?.message || 'Failed to save');
     }
@@ -53,8 +59,8 @@ export default function PreferencesScreen({ navigation }){
         <View style={styles.sectionContainer}>
           <Text style={[styles.sectionTitle, { color: textColor }]}>Food Authenticity</Text>
           <View style={styles.chipsContainer}>
-            {authenticityOptions.map((opt)=> (
-              <TouchableOpacity key={opt} style={[styles.chip, { backgroundColor: authenticity === opt ? primaryColor : surfaceColor, borderColor: authenticity === opt ? primaryColor : '#E0E0E0' }]} onPress={()=>setAuthenticity(opt)} activeOpacity={0.8}>
+            {authenticityOptions.map((opt) => (
+              <TouchableOpacity key={opt} style={[styles.chip, { backgroundColor: authenticity === opt ? primaryColor : surfaceColor, borderColor: authenticity === opt ? primaryColor : '#E0E0E0' }]} onPress={() => setAuthenticity(opt)} activeOpacity={0.8}>
                 <Text style={[styles.chipText, { color: authenticity === opt ? '#FFF' : textColor }]}>{opt}</Text>
               </TouchableOpacity>
             ))}
@@ -64,8 +70,8 @@ export default function PreferencesScreen({ navigation }){
         <View style={styles.sectionContainer}>
           <Text style={[styles.sectionTitle, { color: textColor }]}>Veg Preference</Text>
           <View style={styles.optionsContainer}>
-            {foodTypeOptions.map((opt)=> (
-              <TouchableOpacity key={opt.value} style={[styles.optionCard, { backgroundColor: veg_pref === opt.value ? primaryColor + '20' : surfaceColor, borderColor: veg_pref === opt.value ? primaryColor : '#E0E0E0', shadowColor: shadowColor }]} onPress={()=>setVegPref(opt.value)} activeOpacity={0.8}>
+            {foodTypeOptions.map((opt) => (
+              <TouchableOpacity key={opt.value} style={[styles.optionCard, { backgroundColor: veg_pref === opt.value ? primaryColor + '20' : surfaceColor, borderColor: veg_pref === opt.value ? primaryColor : '#E0E0E0', shadowColor: shadowColor }]} onPress={() => setVegPref(opt.value)} activeOpacity={0.8}>
                 <Text style={[styles.optionTitle, { color: veg_pref === opt.value ? primaryColor : textColor }]}>{opt.label}</Text>
               </TouchableOpacity>
             ))}

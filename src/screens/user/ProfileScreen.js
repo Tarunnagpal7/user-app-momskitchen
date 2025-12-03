@@ -49,7 +49,6 @@ export default function UserProfileScreen({ navigation }) {
       console.warn('Logout API error', e);
     }
     dispatch(logout());
-    navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
   };
 
   const handleUpdate = async () => {
@@ -127,7 +126,7 @@ export default function UserProfileScreen({ navigation }) {
           </View>
         </View>
 
-    
+
 
         <View style={styles.divider} />
 

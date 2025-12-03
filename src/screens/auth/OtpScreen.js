@@ -47,9 +47,9 @@ export default function OtpScreen({ route, navigation }) {
       // await persistAuth({ accessToken, refreshToken, user: res.data.data.user }); // Removed as redux-persist handles it
 
       if (res.data.data.user.is_active) {
-        navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
+        // navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
       } else {
-        navigation.reset({ index: 0, routes: [{ name: 'Preferences' }] });
+        // navigation.reset({ index: 0, routes: [{ name: 'Preferences' }] });
       }
     } catch (e) {
       console.error('OTP Verify Error:', e);
